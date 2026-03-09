@@ -4,7 +4,7 @@ INSTALL_PREFIX := $(shell pwd)/$(INSTALL_RELPATH)
 BUILD := $(shell pwd)/pgbuild/
 
 .PHONY: all
-all: pgvector postgres
+all: pgvector postgis postgres
 
 ### postgres
 POSTGRES_VERSION := 16.10
@@ -67,6 +67,30 @@ $(INSTALL_PREFIX)/lib/vector.so: $(PGVECTOR_DIR)/Makefile $(INSTALL_PREFIX)/bin/
 .PHONY: pgvector
 pgvector: postgres $(INSTALL_PREFIX)/lib/vector.so
 
+### postgis
+POSTGIS_VERSION := 3.5.2
+POSTGIS_URL := https://download.osgeo.org/postgis/source/postgis-$(POSTGIS_VERSION).tar.gz
+POSTGIS_DIR := postgis-$(POSTGIS_VERSION)
+
+$(POSTGIS_DIR).tar.gz:
+	curl -L -O $(POSTGIS_URL)
+
+$(POSTGIS_DIR)/configure: $(POSTGIS_DIR).tar.gz
+	tar xzf $(POSTGIS_DIR).tar.gz
+	touch $(POSTGIS_DIR)/configure
+
+$(POSTGIS_DIR)/config.status: $(POSTGIS_DIR)/configure $(INSTALL_PREFIX)/bin/postgres
+	cd $(POSTGIS_DIR) && ./configure \
+		--with-pgconfig=$(INSTALL_PREFIX)/bin/pg_config
+
+$(INSTALL_PREFIX)/lib/postgis-3.so: $(POSTGIS_DIR)/config.status
+	unset MAKELEVEL && unset MAKEFLAGS && unset MFLAGS \
+		&& $(MAKE) -C $(POSTGIS_DIR) -j \
+		&& $(MAKE) -C $(POSTGIS_DIR) install
+
+.PHONY: postgis
+postgis: postgres $(INSTALL_PREFIX)/lib/postgis-3.so
+
 ### other
 .PHONY: clean clean-all
 clean:
@@ -74,6 +98,7 @@ clean:
 	rm -rf $(POSTGRES_SRC)
 	rm -rf $(POSTGRES_BLD)
 	rm -rf $(PGVECTOR_DIR)
+	rm -rf $(POSTGIS_DIR)
 
 clean-all: clean
 	rm -rf *.tar.gz
